@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BiletSistem - Tədbir İdarəetmə</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --secondary: #10b981;
+            --dark: #1f2937;
+            --light: #f3f4f6;
+        }
+
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--light); color: var(--dark); }
+        header { background: var(--primary); color: white; padding: 1rem; text-align: center; }
+        nav { display: flex; justify-content: center; gap: 15px; background: #ddd; padding: 10px; }
+        nav button { cursor: pointer; border: none; padding: 8px 15px; border-radius: 5px; background: white; font-weight: bold; }
+        
+        .container { max-width: 900px; margin: 20px auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .hidden { display: none; }
+        
+        /* Seat Map Styling */
+        .seat-map { display: grid; grid-template-columns: repeat(5, 40px); gap: 10px; justify-content: center; margin: 20px 0; }
+        .seat { width: 40px; height: 40px; background: #cbd5e1; border-radius: 5px; cursor: pointer; text-align: center; line-height: 40px; font-size: 12px; }
+        .seat.selected { background: var(--secondary); color: white; }
+        .seat.occupied { background: #ef4444; cursor: not-allowed; }
+
+        .ticket-card { border: 2px dashed #ccc; padding: 20px; text-align: center; margin-top: 20px; }
+        .qr-mock { width: 150px; height: 150px; background: #000; margin: 10px auto; display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; }
+        
+        input, select, button { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; }
+        button { background: var(--primary); color: white; border: none; cursor: pointer; font-size: 16px; }
+        button:hover { opacity: 0.9; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>BiletSistem v1.0</h1>
+</header>
+
+<nav>
+    <button onclick="showSection('organizer')">Təşkilatçı Paneli</button>
+    <button onclick="showSection('events')">Tədbirlər</button>
+    <button onclick="showSection('check')">Bilet Yoxla</button>
+</nav>
+
+<div class="container">
+    
+    <!-- Təşkilatçı Paneli -->
+    <section id="organizer">
+        <h2>Yeni Tədbir Yaradın</h2>
+        <input type="text" id="eventTitle" placeholder="Tədbirin adı">
+        <select id="category">
+            <option value="Standard">Standard - 20 AZN</option>
+            <option value="VIP">VIP - 50 AZN</option>
+        </select>
+        <button onclick="createEvent()">Tədbiri Dərc Et</button>
+        
+        <h3>Mövcud Tədbirlər üzrə Satışlar</h3>
+        <table id="salesTable">
+            <tr><th>Tədbir</th><th>Kateqoriya</th><th>Satılıb</th></tr>
+        </table>
+    </section>
+
+    <!-- Tədbirlər və Bilet Alışı -->
+    <section id="events" class="hidden">
+        <h2>Aktiv Tədbirlər</h2>
+        <div id="eventList">
+            <!-- Dinamik yüklənəcək -->
+        </div>
+
+        <div id="bookingStep" class="hidden">
+            <h3>Oturacaq Seçin</h3>
+            <div class="seat-map" id="seatMap">
+                <!-- Oturacaqlar -->
+            </div>
+            <button onclick="processPayment()">Ödənişə Keç (Simulyasiya)</button>
+        </div>
+    </section>
+
+    <!-- Bilet və QR Kod -->
+    <section id="ticketResult" class="hidden">
+        <div class="ticket-card">
+            <h2 id="t-title">Konsert</h2>
+            <p>Kateqoriya: <span id="t-cat">VIP</span></p>
+            <p>Oturacaq: <span id="t-seat">A1</span></p>
+            <div class="qr-mock">
+                [QR KOD]<br>
+                <span id="t-code">12345678</span>
+            </div>
+            <p>Kod: <strong id="t-code-text"></strong></p>
+            <p style="color: green;">Ödəniş uğurla tamamlandı!</p>
+        </div>
+    </section>
+
+    <!-- Bilet Yoxlanışı -->
+    <section id="check" class="hidden">
+        <h2>Biletin Validasiyası</h2>
+        <input type="text" id="checkCode" placeholder="Bilet kodunu daxil edin">
+        <button onclick="validateTicket()">Yoxla</button>
+        <div id="checkResult"></div>
+    </section>
+
+</div>
+
+<script>
+    let events = [];
+    let soldTickets = [];
+    let currentEvent = null;
+    let selectedSeat = null;
+
+    function showSection(id) {
+        document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
+        document.getElementById(id).classList.remove('hidden');
+    }
+
+    function createEvent() {
+        const title = document.getElementById('eventTitle').value;
+        const cat = document.getElementById('category').value;
+        if(!title) return alert("Ad daxil edin");
+
+        const newEvent = { id: Date.now(), title, cat };
+        events.push(newEvent);
+        updateEventList();
+        alert("Tədbir yaradıldı!");
+    }
+
+    function updateEventList() {
+        const list = document.getElementById('eventList');
+        list.innerHTML = events.map(e => `
+            <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
+                <strong>${e.title}</strong> - ${e.cat} 
+                <button onclick="startBooking('${e.title}', '${e.cat}')" style="width:auto; float:right;">Bilet Al</button>
+            </div>
+        `).join('');
+    }
+
+    function startBooking(title, cat) {
+        currentEvent = { title, cat };
+        document.getElementById('bookingStep').classList.remove('hidden');
+        const map = document.getElementById('seatMap');
+        map.innerHTML = '';
+        for(let i=1; i<=10; i++) {
+            const div = document.createElement('div');
+            div.className = 'seat';
+            div.innerText = i;
+            div.onclick = function() {
+                document.querySelectorAll('.seat').forEach(s => s.classList.remove('selected'));
+                this.classList.add('selected');
+                selectedSeat = i;
+            };
+            map.appendChild(div);
+        }
+    }
+
+    function processPayment() {
+        if(!selectedSeat) return alert("Oturacaq seçin!");
+        
+        const ticketCode = "BS-" + Math.random().toString(36).substr(2, 9).toUpperCase();
+        const ticket = { ...currentEvent, seat: selectedSeat, code: ticketCode };
+        
+        soldTickets.push(ticket);
+        
+        // Simulyasiya nəticəsini göstər
+        document.getElementById('t-title').innerText = ticket.title;
+        document.getElementById('t-cat').innerText = ticket.cat;
+        document.getElementById('t-seat').innerText = ticket.seat;
+        document.getElementById('t-code-text').innerText = ticketCode;
+        
+        showSection('ticketResult');
+        updateSalesTable();
+    }
+
+    function updateSalesTable() {
+        const table = document.getElementById('salesTable');
+        table.innerHTML = '<tr><th>Tədbir</th><th>Kateqoriya</th><th>Kod</th></tr>' + 
+            soldTickets.map(t => `<tr><td>${t.title}</td><td>${t.cat}</td><td>${t.code}</td></tr>`).join('');
+    }
+
+    function validateTicket() {
+        const code = document.getElementById('checkCode').value;
+        const found = soldTickets.find(t => t.code === code);
+        const resDiv = document.getElementById('checkResult');
+        
+        if(found) {
+            resDiv.innerHTML = `<p style="color:green;">✅ Valid Bilet: ${found.title} - Oturacaq ${found.seat}</p>`;
+        } else {
+            resDiv.innerHTML = `<p style="color:red;">❌ Keçərsiz Bilet!</p>`;
+        }
+    }
+</script>
+
+</body>
+</html>
